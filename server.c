@@ -145,13 +145,8 @@ main(int argc, char **argv) {
     printf("Client address: %d\n", cli->addr);
     printf("Client id: %d\n", cli->id);
 
-    /* for(int i = 0; i < MAX_CLIENT_NUMBER; i++){ */
-    /*   if(!clients[i]){ */
     clients[clients_number] = cli;
     clients_number++;
-    /* 	return; */
-    /*   } */
-    /* } */
 
     send_message_to_all(cli->cli_co);
     close(new_socket_descriptor);
