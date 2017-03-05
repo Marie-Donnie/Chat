@@ -16,3 +16,69 @@ typedef struct sockaddr sockaddr;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct hostent hostent;
 typedef struct servent servent;
+
+/*--------- Define constants ---------*/
+
+#define SERVER_PORT 5000
+
+int main(int argc, char **argv) {
+  int socket_descriptor,    /* socket descriptor */
+    length;  /* buffer length */
+  sockaddr_in local_address;  /* socket local address */
+  hostent * ptr_host;   /* informations about host machine */
+  servent * ptr_service;  /* informations about service */
+  char buffer[256];
+  char *soft; /* software name */
+  char *host;  /* distant host name */
+  char *msg;  /* sent message */
+  if (argc != 3) {
+    perror("usage : client <server-address> <message-to-send>");
+    exit(1);
+  }
+  soft = argv[0];
+  host = argv[1];
+  msg = argv[2];
+  printf("software name : %s \n", soft);
+  printf("server address  : %s \n", host);
+  printf("message to send  : %s \n", msg);
+  if ((ptr_host = gethostbyname(host)) == NULL) {
+    perror("error: cannot find server");
+    exit(1);
+  }
+  /* character copy of the ptr_host informations to local_address */
+  bcopy((char*)ptr_host->h_addr, (char*)&local_address.sin_addr, ptr_host->h_length);
+  local_address.sin_family = AF_INET; /* ou ptr_host->h_addrtype; */
+  /* use defined port */
+  local_address.sin_port = htons(SERVER_PORT);
+  /*-----------------------------------------------------------*/
+  printf("port number to use for server connection: %d \n", ntohs(local_address.sin_port));
+  /* define socket */
+  if ((socket_descriptor = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    perror("error: unable to create the connection socket.");
+    exit(1);
+  }
+  /* attempt to connect to the server described in local_address */
+  if ((connect(socket_descriptor, (sockaddr*)(&local_address), sizeof(local_address))) < 0) {
+    perror("error: unable to connect to the server.");
+    exit(1);
+  }
+  printf("Connection established. \n");
+  printf("Sending message to the server. \n");
+  /* send message to the server */
+  if ((write(socket_descriptor, msg, strlen(msg))) < 0) {
+    perror("error: unable to send the message.");
+    exit(1);
+  }
+  /* emulate a transmission delay */
+  sleep(3);
+  printf("Message sent to the server. \n");
+  /* listen to the server answer */
+  while((length = read(socket_descriptor, buffer, sizeof(buffer))) > 0) {
+    printf("Server response : \n");
+    write(1,buffer,length);
+  }
+  printf("\nEnd of the transmission.\n");
+  close(socket_descriptor);
+  printf("Connection to the server closed.\n");
+  exit(0);
+}
