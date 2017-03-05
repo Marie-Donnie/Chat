@@ -1,6 +1,6 @@
 
 /*----------------------------------------------
-  Client application
+  Server-side application
   ------------------------------------------------*/
 
 #include <stdlib.h>
@@ -16,3 +16,7 @@ typedef struct sockaddr sockaddr;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct hostent hostent;
 typedef struct servent servent;
+
+/*--------- Define constants ---------*/
+
+#define TAILLE_MAX_NOM 256
