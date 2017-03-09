@@ -21,6 +21,7 @@ typedef struct servent servent;
 
 /*--------- Define constants ---------*/
 
+#define MAX_NAME_SIZE 256
 #define SERVER_PORT 5000
 
 
@@ -45,7 +46,7 @@ int main(int argc, char **argv) {
   char *soft; /* software name */
   char *host;  /* distant host name */
   char msg[256];  /* sent message */
-  char *name; /* user name */
+  char name[MAX_NAME_SIZE]; /* user name */
   int msg_size;
   pthread_t thread;
   if (argc != 3) {
@@ -54,7 +55,7 @@ int main(int argc, char **argv) {
   }
   soft = argv[0];
   host = argv[1];
-  name = argv[2];
+  sprintf(name, "/nick %s", argv[2]);
   printf("software name : %s \n", soft);
   printf("server address  : %s \n", host);
   if ((ptr_host = gethostbyname(host)) == NULL) {
@@ -79,14 +80,18 @@ int main(int argc, char **argv) {
     exit(1);
   }
   printf("Connection established. \n");
+
+  write(socket_descriptor, name, strlen(name));
+
   pthread_create(&thread, NULL, read_loop, (void *)&socket_descriptor);
+
   while ( (msg_size = read(fileno(stdin), msg, sizeof(msg))) > 0){
     /* msg_size = getline (&msg, 0, stdin); */
     //msg_size = -1;
 
     /* send message to the server */
     /* printf("Sending message to the server. \n"); */
-    if ((write(socket_descriptor, msg, strlen(msg))) < 0) {
+    if ((write(socket_descriptor, msg, msg_size)) < 0) {
       perror("error: unable to send the message.");
       exit(1);
     }

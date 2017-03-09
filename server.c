@@ -43,10 +43,10 @@ client *clients[MAX_CLIENT_NUMBER];
 
 /*--------- Functions ---------*/
 
+/* Read a message coming from the socket descriptor cli_co */
 void read_message(char **buffer, int buffer_size, int cli_co){
   int length;
   if ((length = read(cli_co, *buffer, buffer_size)) <= 0){
-    //printf("j'ai read \n");
     return;
   }
   (*buffer)[length] = '\0';
@@ -56,34 +56,34 @@ void read_message(char **buffer, int buffer_size, int cli_co){
 
 /* Send message to all clients but the sender */
 void send_message(char *msg, int id){
-  char buffer[256];
-  int length;
   int i;
-  if ((length = read(id, buffer, sizeof(buffer))) <= 0)
-    return;
-  printf("Income message : %s \n", buffer);
   for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
     if (clients[i]) {
       if (clients[i]->id != id) {
-	write(clients[i]->cli_co, buffer, strlen(buffer)+1);
+	if ((write(clients[i]->cli_co, msg, strlen(msg)+1)) < 0){
+	perror("error: failing to send message to clients");
+	}
       }
     }
   }
-  printf("Messages sent. \n");
 }
 
 /* Send message to all clients */
 void send_message_to_all(char *msg){
   int i;
   for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
-    //printf("s_m_t_a\n");
     if (clients[i]) {
       if ((write(clients[i]->cli_co, msg, strlen(msg)+1)) < 0){
-	perror("error : failing to send message to client");
+	perror("error: failing to send message to clients");
       }
     }
   }
-  //printf("Messages sent. \n");
+}
+
+void send_message_to_client(char *msg, int cli_co){
+  if (write(cli_co, msg, strlen(msg)+1) < 0){
+    perror("error: failing to send message to client");
+  }
 }
 
 
@@ -119,28 +119,60 @@ void remove_client(client *cli){
 void *client_loop(void *arg){
   char *buffer = calloc(256, 1);
   int length;
-  char join[256];
-  char leave[256];
+  char out[256];
+  char *cmd,
+    *args;
 
   client *cli = (client *)arg;
   /* handle the reception of a message */
   /* read_message(&buffer, 256, cli->cli_co); */
 
-  sprintf(join, "%d has joined the chat.\n", cli->id);
-  send_message_to_all(join);
+  sprintf(out, "%d has joined the chat.\n", cli->id);
+  send_message_to_all(out);
 
   while ((length = read(cli->cli_co, buffer, 256)) > 0){
     buffer[length] = '\0';
-    printf("Income message : %s \n", buffer);
-    send_message_to_all(buffer);
+    if (buffer[0] == '/'){
+      /* Split string into tokens*/
+      cmd = strtok(buffer, " \n");
+      if (!strcmp(cmd, "/nick")){
+	/* Alternativelly, a null pointer may be specified, in which case the function continues scanning where a previous successful call to the function ended. */
+	args = strtok(NULL, " \n\t");
+	/* test if args is NULL */
+	if (args){
+	  sprintf(out, "%s renamed to %s.\n", cli->name, args);
+	  strcpy(cli->name, args);
+	  send_message_to_all(out);
+	}
+	else {
+	  send_message_to_client("You must enter a name.\n", cli->cli_co);
+	}
+      }
+      else if (!strcmp(cmd, "/me")){
+	args = strtok(NULL, "\0");
+	sprintf(out, "%s %s", cli->name, args);
+	send_message_to_all(out);
+      }
+      else if (!strcmp(cmd, "/help")){
+	sprintf(out, "/nick <name>\tChange your username to <name>.\n");
+	strcat(out, "/me <action>\tSend the <action> to all.\n");
+	strcat(out, "/help\tPrint this message.\n");
+	send_message_to_client(out, cli->cli_co);
+      }
+    }
+    else {
+      sprintf(out, "%s says : %s", cli->name, buffer);
+      send_message_to_all(out);
+    }
   }
-  sprintf(leave, "%d has left the chat", cli->id);
-  send_message_to_all(leave);
+  sprintf(out, "%s has left the chat.\n", cli->name);
+  send_message_to_all(out);
   close(cli->cli_co);
 
 
   remove_client(cli);
   free(cli);
+  free(buffer);
   pthread_detach(pthread_self());
   return NULL;
 }
@@ -154,10 +186,9 @@ int main(int argc, char **argv) {
   sockaddr_in local_address,    /* local address socket informations */
     cli_addr;  /* client address */
   hostent* ptr_host;  /* informations about host */
-  servent* ptr_service;  /* informations about service */
   char host_name[MAX_NAME_SIZE+1];  /* host name */
-  int listenfd = 0, cli_co = 0;
-  pthread_t thread;
+  pthread_t thread; /* thread to handle client */
+  client *cli; /* client structure */
 
   signal(SIGPIPE, signal_handler);
 
@@ -176,10 +207,8 @@ int main(int argc, char **argv) {
   local_address.sin_addr.s_addr = INADDR_ANY;
   /* use the defined port */
   local_address.sin_port = htons(SERVER_PORT);
-    /*-----------------------------------------------------------*/
-  printf("Using port : %d \n",
-	 ntohs(local_address.sin_port) /*ntohs(ptr_service->s_port)*/);
-  /* create socket */
+  printf("Using port : %d \n", ntohs(local_address.sin_port));
+  /* create socket in socket_descriptor */
   if ((socket_descriptor = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
     perror("error: unable to create the connection socket.");
     exit(1);
@@ -192,8 +221,6 @@ int main(int argc, char **argv) {
   /* initialize the queue */
   listen(socket_descriptor,MAX_CLIENT_NUMBER);
 
-
-  client *cli;
 
   for(;;) {
     address_length = sizeof(cli_addr);
