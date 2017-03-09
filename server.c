@@ -54,20 +54,6 @@ void read_message(char **buffer, int buffer_size, int cli_co){
 }
 
 
-/* Send message to all clients but the sender */
-void send_message(char *msg, int id){
-  int i;
-  for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
-    if (clients[i]) {
-      if (clients[i]->id != id) {
-	if ((write(clients[i]->cli_co, msg, strlen(msg)+1)) < 0){
-	perror("error: failing to send message to clients");
-	}
-      }
-    }
-  }
-}
-
 /* Send message to all clients */
 void send_message_to_all(char *msg){
   int i;
@@ -84,6 +70,18 @@ void send_message_to_client(char *msg, int cli_co){
   if (write(cli_co, msg, strlen(msg)+1) < 0){
     perror("error: failing to send message to client");
   }
+}
+
+int find_client_by_name(char *name){
+  int i;
+  for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
+    if (clients[i]) {
+      if (!strcmp(clients[i]->name, name)){
+	return clients[i]->cli_co;
+      }
+    }
+  }
+  return -1;
 }
 
 
@@ -118,9 +116,11 @@ void remove_client(client *cli){
 
 void *client_loop(void *arg){
   char *buffer = calloc(256, 1);
-  int length;
+  int length,
+    cli_co;
   char out[256];
   char *cmd,
+    *name,
     *args;
 
   client *cli = (client *)arg;
@@ -129,6 +129,8 @@ void *client_loop(void *arg){
 
   sprintf(out, "%d has joined the chat.\n", cli->id);
   send_message_to_all(out);
+  sprintf(out, "Type /help for help.\n");
+  send_message_to_client(out, cli->cli_co);
 
   while ((length = read(cli->cli_co, buffer, 256)) > 0){
     buffer[length] = '\0';
@@ -153,9 +155,24 @@ void *client_loop(void *arg){
 	sprintf(out, "%s %s", cli->name, args);
 	send_message_to_all(out);
       }
+      else if (!strcmp(cmd, "/pm")){
+	name = strtok(NULL, " ");
+	if ((cli_co = find_client_by_name(name)) < 0){
+	  sprintf(out, "%s is not a valid user.\n", name);
+	  send_message_to_client(out, cli->cli_co);
+	}
+	else {
+	  args = strtok(NULL, " ");
+	  sprintf(out, "%s sends to you: %s", cli->name, args);
+	  send_message_to_client(out, cli_co);
+	  sprintf(out, "You sent to %s: %s", name, args);
+	  send_message_to_client(out, cli->cli_co);
+	}
+      }
       else if (!strcmp(cmd, "/help")){
 	sprintf(out, "/nick <name>\tChange your username to <name>.\n");
 	strcat(out, "/me <action>\tSend the <action> to all.\n");
+	strcat(out, "/pm <name> <private-message>\tSend <private-message> to <name>.\n");
 	strcat(out, "/help\tPrint this message.\n");
 	send_message_to_client(out, cli->cli_co);
       }
