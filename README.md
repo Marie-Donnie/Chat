@@ -3,8 +3,7 @@
 ## Compilation and preparation
 
 ```
-gcc client.c -o client -lpthread
-gcc server.c -o server -lpthread
+make
 ```
 
 ## Usage
