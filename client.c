@@ -23,11 +23,12 @@ typedef struct servent servent;
 
 #define MAX_NAME_SIZE 256
 #define SERVER_PORT 5000
+#define BUFFER_SIZE 512
 
 
 void *read_loop(void *arg){
   int length;
-  char buffer[256];
+  char buffer[BUFFER_SIZE];
   int socket_descriptor = *(int *)arg;
     /* listen to the server answer */
   while ((length = read(socket_descriptor, buffer, sizeof(buffer))) > 0) {
@@ -43,7 +44,7 @@ int main(int argc, char **argv) {
   hostent * ptr_host;   /* informations about host machine */
   char *soft; /* software name */
   char *host;  /* distant host name */
-  char msg[256];  /* sent message */
+  char msg[BUFFER_SIZE];  /* sent message */
   char name[MAX_NAME_SIZE]; /* user name */
   int msg_size; /* message size */
   pthread_t thread;

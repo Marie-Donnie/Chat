@@ -19,6 +19,7 @@
 #define MAX_NAME_SIZE 256
 #define MAX_CLIENT_NUMBER 10
 #define SERVER_PORT 5000
+#define BUFFER_SIZE 512
 
 static unsigned int clients_number = 0;
 static int id = 10;
@@ -114,10 +115,10 @@ void remove_client(client *cli){
 
 /* Handle the client thread */
 void *client_loop(void *arg){
-  char *buffer = calloc(256, 1); /* message received */
+  char *buffer = calloc(BUFFER_SIZE, 1); /* message received */
   int length, /* length of the message*/
     cli_co; /* socket_descriptor of the client */
-  char out[256]; /* message that will be sent */
+  char out[BUFFER_SIZE]; /* message that will be sent */
   char *cmd, /* command received */
     *name, /* name received */
     *args; /* arguments received */
@@ -134,7 +135,7 @@ void *client_loop(void *arg){
 
   /* Handle the reception of a message */
   /* read is blocking ; so we enter the loop only if a message is received */
-  while ((length = read(cli->cli_co, buffer, 256)) > 0){
+  while ((length = read(cli->cli_co, buffer, BUFFER_SIZE)) > 0){
     /* Add an end to the buffer */
     buffer[length] = '\0';
     /* Handle the reception of a command */
