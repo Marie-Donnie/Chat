@@ -5,10 +5,14 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <linux/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <string.h>
+#include <signal.h>
+#include <pthread.h>
+
 
 /*--------- Define constants and statics ---------*/
 
@@ -20,7 +24,7 @@ static unsigned int clients_number = 0;
 static int id = 10;
 
 
-/*--------- Define struct types to use it more easily ---------*/
+/*--------- Define struct types ---------*/
 
 typedef struct sockaddr sockaddr;
 typedef struct sockaddr_in sockaddr_in;
@@ -37,9 +41,21 @@ typedef struct {
 
 client *clients[MAX_CLIENT_NUMBER];
 
+/*--------- Functions ---------*/
+
+void read_message(char **buffer, int buffer_size, int cli_co){
+  int length;
+  if ((length = read(cli_co, *buffer, buffer_size)) <= 0){
+    //printf("j'ai read \n");
+    return;
+  }
+  (*buffer)[length] = '\0';
+  printf("Income message : %s \n", *buffer);
+}
+
 
 /* Send message to all clients but the sender */
-void send_message(int id){
+void send_message(char *msg, int id){
   char buffer[256];
   int length;
   int i;
@@ -53,28 +69,85 @@ void send_message(int id){
       }
     }
   }
-    printf("Messages sent. \n");
+  printf("Messages sent. \n");
 }
 
 /* Send message to all clients */
-void send_message_to_all(int cli_co){
-  char buffer[256];
-  int length;
+void send_message_to_all(char *msg){
   int i;
-  if ((length = read(cli_co, buffer, sizeof(buffer))) <= 0)
-    return;
-  printf("Income message : %s \n", buffer);
   for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
+    //printf("s_m_t_a\n");
     if (clients[i]) {
-	write(clients[i]->cli_co, buffer, strlen(buffer)+1);
+      if ((write(clients[i]->cli_co, msg, strlen(msg)+1)) < 0){
+	perror("error : failing to send message to client");
+      }
     }
   }
-    printf("Messages sent. \n");
+  //printf("Messages sent. \n");
 }
 
 
+void signal_handler(int signal_number){
+  printf("Received signal: %s\n", strsignal(signal_number));
+}
 
-main(int argc, char **argv) {
+void add_client(client *cli){
+  int i;
+  for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
+    if (!clients[i]) {
+      clients[i] = cli;
+      return;
+    }
+  }
+  clients_number++;
+}
+
+void remove_client(client *cli){
+  int i;
+  int cli_id = cli->id;
+  for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
+    if (clients[i]) {
+      if ((clients[i])->id == cli_id) {
+	clients[i] = NULL;
+	return;
+      }
+    }
+  }
+  clients_number--;
+}
+
+void *client_loop(void *arg){
+  char *buffer = calloc(256, 1);
+  int length;
+  char join[256];
+  char leave[256];
+
+  client *cli = (client *)arg;
+  /* handle the reception of a message */
+  /* read_message(&buffer, 256, cli->cli_co); */
+
+  sprintf(join, "%d has joined the chat.\n", cli->id);
+  send_message_to_all(join);
+
+  while ((length = read(cli->cli_co, buffer, 256)) > 0){
+    buffer[length] = '\0';
+    printf("Income message : %s \n", buffer);
+    send_message_to_all(buffer);
+  }
+  sprintf(leave, "%d has left the chat", cli->id);
+  send_message_to_all(leave);
+  close(cli->cli_co);
+
+
+  remove_client(cli);
+  free(cli);
+  pthread_detach(pthread_self());
+  return NULL;
+}
+
+/*--------- Main ---------*/
+
+int main(int argc, char **argv) {
   int socket_descriptor,  /* socket descriptor */
     new_socket_descriptor,  /* new socket descriptor */
     address_length; /* client address length */
@@ -84,6 +157,9 @@ main(int argc, char **argv) {
   servent* ptr_service;  /* informations about service */
   char host_name[MAX_NAME_SIZE+1];  /* host name */
   int listenfd = 0, cli_co = 0;
+  pthread_t thread;
+
+  signal(SIGPIPE, signal_handler);
 
   gethostname(host_name,MAX_NAME_SIZE);  /* getting host name */
 
@@ -115,7 +191,10 @@ main(int argc, char **argv) {
   }
   /* initialize the queue */
   listen(socket_descriptor,MAX_CLIENT_NUMBER);
-  /* attente des connexions et traitement des donnees recues */
+
+
+  client *cli;
+
   for(;;) {
     address_length = sizeof(cli_addr);
     /* cli_addr sera renseignée par accept via les infos du connect */
@@ -127,8 +206,7 @@ main(int argc, char **argv) {
       perror("error: unable to accept connection to the client.");
       exit(1);
     }
-    /* handle the reception of a message */
-    printf("Receiving a message.\n");
+
 
     /* check if there is already too many clients */
     if ( (clients_number+1) == MAX_CLIENT_NUMBER){
@@ -137,18 +215,21 @@ main(int argc, char **argv) {
     }
 
     /* Client settings */
-    client *cli = (client *)malloc(sizeof(client));
+    cli = (client *)malloc(sizeof(client));
     cli->addr = cli_addr;
     cli->cli_co = new_socket_descriptor;
     cli->id = id++;
     sprintf(cli->name, "%d", cli->id);
-    printf("Client address: %d\n", cli->addr);
     printf("Client id: %d\n", cli->id);
 
-    clients[clients_number] = cli;
-    clients_number++;
+    add_client(cli);
 
-    send_message_to_all(cli->cli_co);
-    close(new_socket_descriptor);
+
+    pthread_create(&thread, NULL, client_loop, (void *)cli);
+
+
   }
+
+
+  return EXIT_SUCCESS;
 }

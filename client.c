@@ -5,10 +5,12 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <linux/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <string.h>
+#include <pthread.h>
 
 /*--------- Define struct types to use it more easily ---------*/
 
@@ -21,26 +23,40 @@ typedef struct servent servent;
 
 #define SERVER_PORT 5000
 
+
+void *read_loop(void *arg){
+  int length;
+  char buffer[256];
+  int socket_descriptor = *(int *)arg;
+    /* listen to the server answer */
+  while ((length = read(socket_descriptor, buffer, sizeof(buffer))) > 0) {
+    write(fileno(stdout),buffer,length);
+  }
+
+  return NULL;
+}
+
 int main(int argc, char **argv) {
-  int socket_descriptor,    /* socket descriptor */
-    length;  /* buffer length */
+  int socket_descriptor;    /* socket descriptor */
   sockaddr_in local_address;  /* socket local address */
   hostent * ptr_host;   /* informations about host machine */
   servent * ptr_service;  /* informations about service */
   char buffer[256];
   char *soft; /* software name */
   char *host;  /* distant host name */
-  char *msg;  /* sent message */
+  char msg[256];  /* sent message */
+  char *name; /* user name */
+  int msg_size;
+  pthread_t thread;
   if (argc != 3) {
-    perror("usage : client <server-address> <message-to-send>");
+    perror("usage : client <server-address> <user-name>");
     exit(1);
   }
   soft = argv[0];
   host = argv[1];
-  msg = argv[2];
+  name = argv[2];
   printf("software name : %s \n", soft);
   printf("server address  : %s \n", host);
-  printf("message to send  : %s \n", msg);
   if ((ptr_host = gethostbyname(host)) == NULL) {
     perror("error: cannot find server");
     exit(1);
@@ -63,22 +79,27 @@ int main(int argc, char **argv) {
     exit(1);
   }
   printf("Connection established. \n");
-  printf("Sending message to the server. \n");
-  /* send message to the server */
-  if ((write(socket_descriptor, msg, strlen(msg))) < 0) {
-    perror("error: unable to send the message.");
-    exit(1);
-  }
-  /* emulate a transmission delay */
-  sleep(3);
-  printf("Message sent to the server. \n");
-  /* listen to the server answer */
-  while((length = read(socket_descriptor, buffer, sizeof(buffer))) > 0) {
-    printf("Server response : \n");
-    write(1,buffer,length);
+  pthread_create(&thread, NULL, read_loop, (void *)&socket_descriptor);
+  while ( (msg_size = read(fileno(stdin), msg, sizeof(msg))) > 0){
+    /* msg_size = getline (&msg, 0, stdin); */
+    //msg_size = -1;
+
+    /* send message to the server */
+    /* printf("Sending message to the server. \n"); */
+    if ((write(socket_descriptor, msg, strlen(msg))) < 0) {
+      perror("error: unable to send the message.");
+      exit(1);
+    }
+    /* printf("Message sent to the server. \n"); */
+
+    /* emulate a transmission delay */
+    /* sleep(3); */
+
   }
   printf("\nEnd of the transmission.\n");
   close(socket_descriptor);
   printf("Connection to the server closed.\n");
-  exit(0);
+
+
+  return EXIT_SUCCESS;
 }
