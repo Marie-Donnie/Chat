@@ -41,14 +41,13 @@ int main(int argc, char **argv) {
   int socket_descriptor;    /* socket descriptor */
   sockaddr_in local_address;  /* socket local address */
   hostent * ptr_host;   /* informations about host machine */
-  servent * ptr_service;  /* informations about service */
-  char buffer[256];
   char *soft; /* software name */
   char *host;  /* distant host name */
   char msg[256];  /* sent message */
   char name[MAX_NAME_SIZE]; /* user name */
-  int msg_size;
+  int msg_size; /* message size */
   pthread_t thread;
+
   if (argc != 3) {
     perror("usage : client <server-address> <user-name>");
     exit(1);
@@ -56,8 +55,8 @@ int main(int argc, char **argv) {
   soft = argv[0];
   host = argv[1];
   sprintf(name, "/nick %s", argv[2]);
-  printf("software name : %s \n", soft);
-  printf("server address  : %s \n", host);
+  printf("software name: %s ; server address: %s ; name chosen: %s \n", soft, host, name);
+
   if ((ptr_host = gethostbyname(host)) == NULL) {
     perror("error: cannot find server");
     exit(1);
@@ -81,13 +80,15 @@ int main(int argc, char **argv) {
   }
   printf("Connection established. \n");
 
+  /* Send name to the server */
   write(socket_descriptor, name, strlen(name));
 
+  /* Handle the reception of messages from the server */
   pthread_create(&thread, NULL, read_loop, (void *)&socket_descriptor);
 
+  /* Handle the sending of messages */
+  /* read is blocking so the loop is used only when a message is read */
   while ( (msg_size = read(fileno(stdin), msg, sizeof(msg))) > 0){
-    /* msg_size = getline (&msg, 0, stdin); */
-    //msg_size = -1;
 
     /* send message to the server */
     /* printf("Sending message to the server. \n"); */
@@ -97,10 +98,8 @@ int main(int argc, char **argv) {
     }
     /* printf("Message sent to the server. \n"); */
 
-    /* emulate a transmission delay */
-    /* sleep(3); */
-
   }
+
   printf("\nEnd of the transmission.\n");
   close(socket_descriptor);
   printf("Connection to the server closed.\n");

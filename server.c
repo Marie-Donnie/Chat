@@ -43,18 +43,7 @@ client *clients[MAX_CLIENT_NUMBER];
 
 /*--------- Functions ---------*/
 
-/* Read a message coming from the socket descriptor cli_co */
-void read_message(char **buffer, int buffer_size, int cli_co){
-  int length;
-  if ((length = read(cli_co, *buffer, buffer_size)) <= 0){
-    return;
-  }
-  (*buffer)[length] = '\0';
-  printf("Income message : %s \n", *buffer);
-}
-
-
-/* Send message to all clients */
+/* Send a message to all clients */
 void send_message_to_all(char *msg){
   int i;
   for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
@@ -66,17 +55,24 @@ void send_message_to_all(char *msg){
   }
 }
 
+/* Send a message to the client given by cli_co */
 void send_message_to_client(char *msg, int cli_co){
   if (write(cli_co, msg, strlen(msg)+1) < 0){
     perror("error: failing to send message to client");
   }
 }
 
+/* Find a client in the list using the name given,
+return client cli_co if found
+or -1 if name is not found */
 int find_client_by_name(char *name){
   int i;
   for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
     if (clients[i]) {
+      /* Compare client name with the name given,
+	 srcmp == 0 if the arguments are equal */
       if (!strcmp(clients[i]->name, name)){
+	/* Return client cli_co if found */
 	return clients[i]->cli_co;
       }
     }
@@ -84,11 +80,12 @@ int find_client_by_name(char *name){
   return -1;
 }
 
-
+/* Enable the handling of signals */
 void signal_handler(int signal_number){
   printf("Received signal: %s\n", strsignal(signal_number));
 }
 
+/* Add a client to the client list and increase the number of clients */
 void add_client(client *cli){
   int i;
   for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
@@ -100,6 +97,7 @@ void add_client(client *cli){
   clients_number++;
 }
 
+/* Remove a client from the client list and descrease the number of clients */
 void remove_client(client *cli){
   int i;
   int cli_id = cli->id;
@@ -114,53 +112,65 @@ void remove_client(client *cli){
   clients_number--;
 }
 
+/* Handle the client thread */
 void *client_loop(void *arg){
-  char *buffer = calloc(256, 1);
-  int length,
-    cli_co;
-  char out[256];
-  char *cmd,
-    *name,
-    *args;
+  char *buffer = calloc(256, 1); /* message received */
+  int length, /* length of the message*/
+    cli_co; /* socket_descriptor of the client */
+  char out[256]; /* message that will be sent */
+  char *cmd, /* command received */
+    *name, /* name received */
+    *args; /* arguments received */
 
+  /* Make proper use of the arg received */
   client *cli = (client *)arg;
-  /* handle the reception of a message */
-  /* read_message(&buffer, 256, cli->cli_co); */
+
+  /* Greet the client */
 
   sprintf(out, "%d has joined the chat.\n", cli->id);
   send_message_to_all(out);
   sprintf(out, "Type /help for help.\n");
   send_message_to_client(out, cli->cli_co);
 
+  /* Handle the reception of a message */
+  /* read is blocking ; so we enter the loop only if a message is received */
   while ((length = read(cli->cli_co, buffer, 256)) > 0){
+    /* Add an end to the buffer */
     buffer[length] = '\0';
+    /* Handle the reception of a command */
     if (buffer[0] == '/'){
-      /* Split string into tokens*/
+      /* strtok splits string into tokens*/
       cmd = strtok(buffer, " \n");
+      /* Check which command it is */
+      /* Command: /nick <name> */
       if (!strcmp(cmd, "/nick")){
-	/* Alternativelly, a null pointer may be specified, in which case the function continues scanning where a previous successful call to the function ended. */
-	args = strtok(NULL, " \n\t");
-	/* test if args is NULL */
-	if (args){
-	  sprintf(out, "%s renamed to %s.\n", cli->name, args);
-	  strcpy(cli->name, args);
+	/* strtok documentation : Alternativelly, a null pointer may be specified, in which case the function continues scanning where a previous successful call to the function ended. */
+	name = strtok(NULL, " \n\t");
+	/* test if name is NULL, so no name was given */
+	if (name){
+	  sprintf(out, "%s renamed to %s.\n", cli->name, name);
+	  strcpy(cli->name, name);
 	  send_message_to_all(out);
 	}
 	else {
 	  send_message_to_client("You must enter a name.\n", cli->cli_co);
 	}
       }
+      /* Command: /me <action> */
       else if (!strcmp(cmd, "/me")){
 	args = strtok(NULL, "\0");
 	sprintf(out, "%s %s", cli->name, args);
 	send_message_to_all(out);
       }
+      /* Command: /pm <name> <private-message */
       else if (!strcmp(cmd, "/pm")){
 	name = strtok(NULL, " ");
+	/* Check if name exists in the client list */
 	if ((cli_co = find_client_by_name(name)) < 0){
 	  sprintf(out, "%s is not a valid user.\n", name);
 	  send_message_to_client(out, cli->cli_co);
 	}
+	/* Send the private message to both sender and receiver */
 	else {
 	  args = strtok(NULL, " ");
 	  sprintf(out, "%s sends to you: %s", cli->name, args);
@@ -169,6 +179,7 @@ void *client_loop(void *arg){
 	  send_message_to_client(out, cli->cli_co);
 	}
       }
+      /* Command: /help */
       else if (!strcmp(cmd, "/help")){
 	sprintf(out, "/nick <name>\tChange your username to <name>.\n");
 	strcat(out, "/me <action>\tSend the <action> to all.\n");
@@ -177,16 +188,21 @@ void *client_loop(void *arg){
 	send_message_to_client(out, cli->cli_co);
       }
     }
+    /* Message is not a command */
     else {
       sprintf(out, "%s says : %s", cli->name, buffer);
       send_message_to_all(out);
     }
   }
+
+  /* Client quit/disconnected */
+
+  /* Notify the clients */
   sprintf(out, "%s has left the chat.\n", cli->name);
   send_message_to_all(out);
+
+  /* Handle the proper closing of the thread */
   close(cli->cli_co);
-
-
   remove_client(cli);
   free(cli);
   free(buffer);
@@ -207,6 +223,7 @@ int main(int argc, char **argv) {
   pthread_t thread; /* thread to handle client */
   client *cli; /* client structure */
 
+  /* Handle SIGPIPE signal */
   signal(SIGPIPE, signal_handler);
 
   gethostname(host_name,MAX_NAME_SIZE);  /* getting host name */
@@ -241,7 +258,7 @@ int main(int argc, char **argv) {
 
   for(;;) {
     address_length = sizeof(cli_addr);
-    /* cli_addr sera renseignée par accept via les infos du connect */
+    /* cli_addr given by accept with connect informations*/
     if ((new_socket_descriptor =
 	 accept(socket_descriptor,
 		(sockaddr*)(&cli_addr),
@@ -251,14 +268,13 @@ int main(int argc, char **argv) {
       exit(1);
     }
 
-
-    /* check if there is already too many clients */
+    /* check if there are already too many clients */
     if ( (clients_number+1) == MAX_CLIENT_NUMBER){
       printf("Too many clients already; client rejected\n");
       close(new_socket_descriptor);
     }
 
-    /* Client settings */
+    /* Client settings and handling */
     cli = (client *)malloc(sizeof(client));
     cli->addr = cli_addr;
     cli->cli_co = new_socket_descriptor;
@@ -267,10 +283,7 @@ int main(int argc, char **argv) {
     printf("Client id: %d\n", cli->id);
 
     add_client(cli);
-
-
     pthread_create(&thread, NULL, client_loop, (void *)cli);
-
 
   }
 
