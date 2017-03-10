@@ -25,11 +25,14 @@ typedef struct servent servent;
 #define SERVER_PORT 5000
 #define BUFFER_SIZE 512
 
+static int socket_descriptor;    /* socket descriptor */
+
 
 void *read_loop(void *arg){
   int length;
   char buffer[BUFFER_SIZE];
   int socket_descriptor = *(int *)arg;
+  char *cmd ; /* command received */
     /* listen to the server answer */
   while ((length = read(socket_descriptor, buffer, sizeof(buffer))) > 0) {
     write(fileno(stdout),buffer,length);
@@ -39,8 +42,7 @@ void *read_loop(void *arg){
 }
 
 int main(int argc, char **argv) {
-  int socket_descriptor,    /* socket descriptor */
-    msg_size; /* message size */
+  int msg_size; /* message size */
   sockaddr_in local_address;  /* socket local address */
   hostent * ptr_host;   /* informations about host machine */
   char *soft; /* software name */

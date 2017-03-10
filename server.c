@@ -23,6 +23,7 @@
 
 static unsigned int clients_number = 0;
 static int id = 0;
+static int socket_descriptor;  /* socket descriptor */
 
 
 /*--------- Define struct types ---------*/
@@ -83,7 +84,19 @@ int find_client_by_name(char *name){
 
 /* Enable the handling of signals */
 void signal_handler(int signal_number){
+  int i;
   printf("Received signal: %s\n", strsignal(signal_number));
+  if (signal_number == SIGINT) {
+      for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
+	if (clients[i]) {
+	  send_message_to_client("Server disconnected.\n", clients[i]->cli_co);
+	  close(clients[i]->cli_co);
+	  free(clients[i]);
+	}
+      }
+    close(socket_descriptor);
+  }
+  exit(signal_number);
 }
 
 /* Add a client to the client list and increase the number of clients */
@@ -224,8 +237,7 @@ void *client_loop(void *arg){
 /*--------- Main ---------*/
 
 int main(int argc, char **argv) {
-  int socket_descriptor,  /* socket descriptor */
-    new_socket_descriptor,  /* new socket descriptor */
+  int new_socket_descriptor,  /* new socket descriptor */
     address_length; /* client address length */
   sockaddr_in local_address,    /* local address socket informations */
     cli_addr;  /* client address */
@@ -236,6 +248,7 @@ int main(int argc, char **argv) {
 
   /* Handle SIGPIPE signal */
   signal(SIGPIPE, signal_handler);
+  signal(SIGINT, signal_handler);
 
   gethostname(host_name,MAX_NAME_SIZE);  /* getting host name */
 
