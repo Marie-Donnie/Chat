@@ -86,6 +86,7 @@ int find_client_by_name(char *name){
 void signal_handler(int signal_number){
   int i;
   printf("Received signal: %s\n", strsignal(signal_number));
+  /* Warn the clients that the server is closing */
   if (signal_number == SIGINT) {
       for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
 	if (clients[i]) {
