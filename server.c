@@ -149,6 +149,7 @@ void *client_loop(void *arg){
 	name = strtok(NULL, " \n\t");
 	/* test if name is NULL, so no name was given */
 	if (name){
+	  /* Check if the name is not already used */
 	  if (find_client_by_name(name) < 0){
 	    sprintf(out, "%s renamed to %s.\n", cli->name, name);
 	    strcpy(cli->name, name);
