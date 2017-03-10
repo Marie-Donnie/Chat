@@ -149,9 +149,15 @@ void *client_loop(void *arg){
 	name = strtok(NULL, " \n\t");
 	/* test if name is NULL, so no name was given */
 	if (name){
-	  sprintf(out, "%s renamed to %s.\n", cli->name, name);
-	  strcpy(cli->name, name);
-	  send_message_to_all(out);
+	  if (find_client_by_name(name) < 0){
+	    sprintf(out, "%s renamed to %s.\n", cli->name, name);
+	    strcpy(cli->name, name);
+	    send_message_to_all(out);
+	  }
+	  else {
+	    sprintf(out, "%s is already in use.\n", name);
+	    send_message_to_client(out, cli->cli_co);
+	  }
 	}
 	else {
 	  send_message_to_client("You must enter a name.\n", cli->cli_co);
