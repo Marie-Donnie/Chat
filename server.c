@@ -21,8 +21,8 @@
 #define SERVER_PORT 5000
 #define BUFFER_SIZE 512
 
-static unsigned int clients_number = 0;
-static int id = 0;
+static unsigned int clients_number = 0; /* counts the client connected to the server */
+static int id = 0; /* id of the client */
 static int socket_descriptor;  /* socket descriptor */
 
 
@@ -305,7 +305,7 @@ int main(int argc, char **argv) {
     cli->cli_co = new_socket_descriptor;
     cli->id = id++;
     sprintf(cli->name, "%d", cli->id);
-    printf("Client id: %d\n", cli->id);
+    printf("Client connected, using the id: %d\n", cli->id);
 
     add_client(cli);
     pthread_create(&thread, NULL, client_loop, (void *)cli);
