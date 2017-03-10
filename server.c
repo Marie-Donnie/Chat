@@ -22,7 +22,7 @@
 #define BUFFER_SIZE 512
 
 static unsigned int clients_number = 0;
-static int id = 10;
+static int id = 0;
 
 
 /*--------- Define struct types ---------*/
