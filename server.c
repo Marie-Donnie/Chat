@@ -180,7 +180,7 @@ void *client_loop(void *arg){
 	}
 	/* Send the private message to both sender and receiver */
 	else {
-	  args = strtok(NULL, " ");
+	  args = strtok(NULL, "\0");
 	  sprintf(out, "%s sends to you: %s", cli->name, args);
 	  send_message_to_client(out, cli_co);
 	  sprintf(out, "You sent to %s: %s", name, args);
