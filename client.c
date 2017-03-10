@@ -39,15 +39,16 @@ void *read_loop(void *arg){
 }
 
 int main(int argc, char **argv) {
-  int socket_descriptor;    /* socket descriptor */
+  int socket_descriptor,    /* socket descriptor */
+    msg_size; /* message size */
   sockaddr_in local_address;  /* socket local address */
   hostent * ptr_host;   /* informations about host machine */
   char *soft; /* software name */
   char *host;  /* distant host name */
   char msg[BUFFER_SIZE];  /* sent message */
   char name[MAX_NAME_SIZE]; /* user name */
-  int msg_size; /* message size */
-  pthread_t thread;
+  pthread_t thread; /* thread to handle incoming messages from the server */
+  char *cmd; /* command received */
 
   if (argc != 3) {
     perror("usage : client <server-address> <user-name>");
@@ -96,6 +97,10 @@ int main(int argc, char **argv) {
     if ((write(socket_descriptor, msg, msg_size)) < 0) {
       perror("error: unable to send the message.");
       exit(1);
+    }
+    cmd = strtok(msg, " \n\t");
+    if (!strcmp(cmd, "/quit")){
+      break;
     }
     /* printf("Message sent to the server. \n"); */
 

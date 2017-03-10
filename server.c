@@ -187,6 +187,9 @@ void *client_loop(void *arg){
 	  send_message_to_client(out, cli->cli_co);
 	}
       }
+      else if (!strcmp(cmd, "/quit")){
+	  break;
+	}
       /* Command: /help */
       else if (!strcmp(cmd, "/help")){
 	sprintf(out, "/nick <name>\tChange your username to <name>.\n");
