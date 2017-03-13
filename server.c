@@ -192,23 +192,32 @@ void remove_channel(int index){
   channels_number--;
 }
 
-int add_client_to_channel(client *cli, int chan_index){
+int is_client_on_channel(char *name, int chan_index){
   int i;
   channel *chan = channels[chan_index];
   for (i = 0; i < MAX_USER_BY_CHANNEL ; i++){
     if (chan->chan_clients[i]){
-      if (!strcmp(chan->chan_clients[i]->name, cli->name)){
-	return -1;
+      if (!strcmp(chan->chan_clients[i]->name, name)){
+	return 0;
       }
     }
   }
-  for (i = 0; i < MAX_USER_BY_CHANNEL ; i++){
-    if (!chan->chan_clients[i]){
-      chan->chan_clients[i] = cli;
-      chan->client_number++;
-      return 0;
+  return -1;
+}
+
+int add_client_to_channel(client *cli, int chan_index){
+  int i;
+  channel *chan = channels[chan_index];
+  if (is_client_on_channel(cli->name, chan_index) < 0) {
+    for (i = 0; i < MAX_USER_BY_CHANNEL ; i++){
+      if (!chan->chan_clients[i]){
+	chan->chan_clients[i] = cli;
+	chan->client_number++;
+	return 0;
+      }
     }
   }
+  return -1;
 }
 
 void remove_client_from_channel(char *name, int chan_index){}
