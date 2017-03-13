@@ -186,13 +186,14 @@ int add_channel(char *chan_name){
     return i;
 }
 
-void remove_channel(int index){
+int remove_channel(int index){
   free(channels[index]);
   channels[index] = NULL;
   channels_number--;
+  return channels_number;
 }
 
-int is_client_on_channel(char *name, int chan_index){
+int is_user_on_channel(char *name, int chan_index){
   int i;
   channel *chan = channels[chan_index];
   for (i = 0; i < MAX_USER_BY_CHANNEL ; i++){
@@ -208,7 +209,7 @@ int is_client_on_channel(char *name, int chan_index){
 int add_client_to_channel(client *cli, int chan_index){
   int i;
   channel *chan = channels[chan_index];
-  if (is_client_on_channel(cli->name, chan_index) < 0) {
+  if (is_user_on_channel(cli->name, chan_index) < 0) {
     for (i = 0; i < MAX_USER_BY_CHANNEL ; i++){
       if (!chan->chan_clients[i]){
 	chan->chan_clients[i] = cli;
@@ -220,14 +221,44 @@ int add_client_to_channel(client *cli, int chan_index){
   return -1;
 }
 
-void remove_client_from_channel(char *name, int chan_index){}
+int remove_user_from_channel(char *name, int chan_index){
+  int i;
+  channel *chan = channels[chan_index];
+  for (i = 0; i < MAX_USER_BY_CHANNEL ; i++){
+    if (chan->chan_clients[i] && !strcmp(chan->chan_clients[i]->name, name)) {
+      chan->chan_clients[i] = NULL;
+      chan->client_number--;
+      break;
+    }
+  }
+  return chan->client_number;
+}
+
+int count_clients_on_channel(int chan_index){
+  return channels[chan_index]->client_number;
+}
+
+char* who_is_on_channel(int chan_index){
+  int i;
+  channel *chan = channels[chan_index];
+  char *list = "";
+  char *name = "";
+  for (i = 0; i < MAX_USER_BY_CHANNEL ; i++){
+    if (chan->chan_clients[i]){
+      sprintf(name, "%s ", chan->chan_clients[i]->name);
+      strcat(list, name);
+    }
+  }
+  return list;
+}
 
 /* Handle the client thread */
 void *client_loop(void *arg){
   char *buffer = calloc(BUFFER_SIZE, 1); /* message received */
   int length, /* length of the message*/
     cli_co, /* socket_descriptor of the client */
-    index;
+    index,
+    answer;
   char out[BUFFER_SIZE]; /* message that will be sent */
   char *cmd, /* command received */
     *name, /* name received */
@@ -366,6 +397,26 @@ void *client_loop(void *arg){
 	    send_message_to_client(out, cli->cli_co);
 	  }
       }
+      /* Command: /leave <channel-name> */
+      else if (!strcmp(cmd, "/leave")) {
+	name = strtok(NULL, " \n\t");
+	if (name){
+	  index = find_channel_by_name(name);
+	  if (is_user_on_channel(cli->name, index) == 0) {
+	    answer = remove_user_from_channel(cli->name, index);
+	    sprintf(out, "Left channel: %s. \n", name);
+	    send_message_to_client(out, cli->cli_co);
+	    sprintf(out, "%s left channel %s.\n", cli->name, name);
+	    send_message_to_channel(out, index);
+	    if (answer == 0) {
+	      printf("number of chan: %d.\n", channels_number);
+	      remove_channel(index);
+	      printf("number of chan: %d.\n", channels_number);
+	    }
+	  }
+	}
+      }
+      /* Command: /quit */
       else if (!strcmp(cmd, "/quit")) {
 	break;
       }
