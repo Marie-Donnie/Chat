@@ -153,6 +153,8 @@ void remove_client(client *cli){
   clients_number--;
 }
 
+/* Find a channel in channels array given its name
+   Return the index where the channel is in the array */
 int find_channel_by_name(char *chan_name){
   int i;
   for (i = 0; i < MAX_CHANNEL_NUMBER; i++) {
@@ -169,6 +171,8 @@ int find_channel_by_name(char *chan_name){
   return -1;
 }
 
+/* Add a channel to the channels array
+   Return the index where it was added */
 int add_channel(char *chan_name){
   int i;
   channel *chan;
@@ -186,6 +190,7 @@ int add_channel(char *chan_name){
     return i;
 }
 
+/* Removes a channel from the channels array, return the number of channels left */
 int remove_channel(int index){
   free(channels[index]);
   channels[index] = NULL;
@@ -193,6 +198,8 @@ int remove_channel(int index){
   return channels_number;
 }
 
+/* Say if a user (from his name) is on a chan given its position in channels array
+   Return 0 if the given */
 int is_user_on_channel(char *name, int chan_index){
   int i;
   channel *chan = channels[chan_index];
@@ -206,6 +213,8 @@ int is_user_on_channel(char *name, int chan_index){
   return -1;
 }
 
+/* Add a client to a channel given its position in channels array.
+   Return the index of the client in the array, or -1 if the user is already on the channel*/
 int add_client_to_channel(client *cli, int chan_index){
   int i;
   channel *chan = channels[chan_index];
@@ -214,13 +223,15 @@ int add_client_to_channel(client *cli, int chan_index){
       if (!chan->chan_clients[i]){
 	chan->chan_clients[i] = cli;
 	chan->client_number++;
-	return 0;
+	return i;
       }
     }
   }
   return -1;
 }
 
+/* Remove a user (from his name) from a chan given its position in channels
+   Return the number of user left on the channel. */
 int remove_user_from_channel(char *name, int chan_index){
   int i;
   channel *chan = channels[chan_index];
@@ -234,10 +245,8 @@ int remove_user_from_channel(char *name, int chan_index){
   return chan->client_number;
 }
 
-int count_clients_on_channel(int chan_index){
-  return channels[chan_index]->client_number;
-}
 
+/* Return a formatted list of user of a channel given its position in channels */
 char* who_is_on_channel(int chan_index){
   int i;
   channel *chan = channels[chan_index];
@@ -377,8 +386,10 @@ void *client_loop(void *arg){
       /* Command: /tell <channel-name> <message> */
       else if (!strcmp(cmd, "/tell")) {
 	  name = strtok(NULL, " \n\t");
+	  /* Send message if the given name is a channel */
 	  if (name && (index = find_channel_by_name(name)) >= 0){
 	    args = strtok(NULL, "\0");
+	    /* And if there is a message */
 	    if (args){
 	      sprintf(out, "%s said on %s: %s", cli->name, name, args);
 	      send_message_to_channel(out, index);
@@ -401,13 +412,16 @@ void *client_loop(void *arg){
       else if (!strcmp(cmd, "/leave")) {
 	name = strtok(NULL, " \n\t");
 	if (name){
+	  /* Get the index of the chan given */
 	  index = find_channel_by_name(name);
+	  /* Remove the user only if he is already on channel */
 	  if (is_user_on_channel(cli->name, index) == 0) {
 	    answer = remove_user_from_channel(cli->name, index);
 	    sprintf(out, "Left channel: %s. \n", name);
 	    send_message_to_client(out, cli->cli_co);
 	    sprintf(out, "%s left channel %s.\n", cli->name, name);
 	    send_message_to_channel(out, index);
+	    /* Remove chan from the chan list if there are not any user left */
 	    if (answer == 0) {
 	      printf("number of chan: %d.\n", channels_number);
 	      remove_channel(index);
