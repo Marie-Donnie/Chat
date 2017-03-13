@@ -18,7 +18,7 @@
 
 #define SERVER_PORT 5000         /* Port used for sin_port from sockaddr_in */
 #define BUFFER_SIZE 512          /* Size of buffers used */
-#define MAX_NAME_SIZE 256        /* Maximum name size for users and channels */
+#define MAX_NAME_SIZE 32        /* Maximum name size for users and channels */
 #define MAX_CLIENT_NUMBER 10     /* Maximum number of clients connected to the server */
 #define MAX_CHANNEL_NUMBER 10    /* Maximum number of channels on the server */
 #define MAX_USER_BY_CHANNEL 10   /* Maximum number of clients per channel */
@@ -153,8 +153,22 @@ void remove_client(client *cli){
   clients_number--;
 }
 
+/* Return a formatted list of users of the server */
+char* who_is_on_server(){
+  int i;
+  char *list = calloc(BUFFER_SIZE, 1);
+  char name[MAX_NAME_SIZE + 2];
+  for (i = 0; i < MAX_CLIENT_NUMBER ; i++){
+    if (clients[i]){
+      sprintf(name, "%s ", clients[i]->name);
+      strcat(list, name);
+    }
+  }
+  return list;
+}
+
 /* Find a channel in channels array given its name
-   Return the index where the channel is in the array */
+   Return the index where the channel is in the array, -1 if not found */
 int find_channel_by_name(char *chan_name){
   int i;
   for (i = 0; i < MAX_CHANNEL_NUMBER; i++) {
@@ -246,12 +260,12 @@ int remove_user_from_channel(char *name, int chan_index){
 }
 
 
-/* Return a formatted list of user of a channel given its position in channels */
+/* Return a formatted list of users of a channel given its position in channels */
 char* who_is_on_channel(int chan_index){
   int i;
   channel *chan = channels[chan_index];
-  char *list = "";
-  char *name = "";
+  char *list = calloc(BUFFER_SIZE, 1);
+  char name[MAX_NAME_SIZE + 2];
   for (i = 0; i < MAX_USER_BY_CHANNEL ; i++){
     if (chan->chan_clients[i]){
       sprintf(name, "%s ", chan->chan_clients[i]->name);
@@ -428,6 +442,46 @@ void *client_loop(void *arg){
 	      printf("number of chan: %d.\n", channels_number);
 	    }
 	  }
+	}
+      }
+      /* Command: /who <channel> */
+      else if (!strcmp(cmd, "/who")) {
+	args = strtok(NULL, " \n\t");
+	if (args){
+	  /* If global, list the users on the server */
+	  if (!strcmp(args, "global")){
+	    name = who_is_on_server();
+	    sprintf(out, "Users on the server: %s\n", name);
+	    free(name);
+	  }
+	  /* If not and the args are a channel-name, list the users on the channel */
+	  else if ((index = find_channel_by_name(args)) >= 0){
+	    name = who_is_on_channel(index);
+	    sprintf(out, "Users on channel %s: %s\n", args, name);
+	    free(name);
+	  }
+	}
+	send_message_to_client(out, cli->cli_co);
+      }
+      /* Command: /howmany <channel> */
+      else if (!strcmp(cmd, "/howmany")) {
+	args = strtok(NULL, " \n\t");
+      	if (args){
+	  /* If global, return the number of users on the server */
+	  if (!strcmp(args, "global")){
+	    sprintf(out, "Users on the server: %d on %d users authorized.\n",
+		    clients_number, MAX_CLIENT_NUMBER);
+	  }
+	  /* If channels, return the number of channels used */
+	  else if (!strcmp(args, "channels")){
+	    sprintf(out, "%d channels out of %d available", channels_number, MAX_CHANNEL_NUMBER);
+	  }
+	  /* If not and the args are a channel-name, return the number of users on the channel */
+	  else if ((index = find_channel_by_name(args)) >= 0){
+	    sprintf(out, "Users on channel %s : %d on %d users authorized.\n",
+		    channels[index]->name, channels[index]->client_number, MAX_USER_BY_CHANNEL);
+	  }
+	  send_message_to_client(out, cli->cli_co);
 	}
       }
       /* Command: /quit */
