@@ -12,18 +12,18 @@
 #include <string.h>
 #include <pthread.h>
 
-/*--------- Define struct types to use it more easily ---------*/
+/*--------- Define struct types ---------*/
 
 typedef struct sockaddr sockaddr;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct hostent hostent;
 typedef struct servent servent;
 
-/*--------- Define constants ---------*/
+/*--------- Define constants and global variables ---------*/
 
-#define MAX_NAME_SIZE 256
-#define SERVER_PORT 5000
-#define BUFFER_SIZE 512
+#define MAX_NAME_SIZE 256        /* Maximum name size for users and channels */
+#define SERVER_PORT 5000         /* Port used for sin_port from sockaddr_in */
+#define BUFFER_SIZE 512          /* Size of buffers used */
 
 static int socket_descriptor;    /* socket descriptor */
 
@@ -32,12 +32,10 @@ void *read_loop(void *arg){
   int length;
   char buffer[BUFFER_SIZE];
   int socket_descriptor = *(int *)arg;
-  char *cmd ; /* command received */
-    /* listen to the server answer */
+  /* listen to the server answer */
   while ((length = read(socket_descriptor, buffer, sizeof(buffer))) > 0) {
     write(fileno(stdout),buffer,length);
   }
-
   return NULL;
 }
 

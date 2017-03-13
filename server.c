@@ -14,16 +14,19 @@
 #include <pthread.h>
 
 
-/*--------- Define constants and statics ---------*/
+/*--------- Define constants and global variables ---------*/
 
-#define MAX_NAME_SIZE 256
-#define MAX_CLIENT_NUMBER 10
-#define SERVER_PORT 5000
-#define BUFFER_SIZE 512
+#define SERVER_PORT 5000         /* Port used for sin_port from sockaddr_in */
+#define BUFFER_SIZE 512          /* Size of buffers used */
+#define MAX_NAME_SIZE 256        /* Maximum name size for users and channels */
+#define MAX_CLIENT_NUMBER 10     /* Maximum number of clients connected to the server */
+#define MAX_CHANNEL_NUMBER 10    /* Maximum number of channels on the server */
+#define MAX_USER_BY_CHANNEL 10   /* Maximum number of clients per channel */
 
-static unsigned int clients_number = 0; /* counts the client connected to the server */
-static int id = 0; /* id of the client */
-static int socket_descriptor;  /* socket descriptor */
+static unsigned int clients_number = 0;  /* counts the client connected to the server */
+static int id = 0;                       /* id of the client */
+static unsigned int channels_number = 0; /* counts the defined channels */
+static int socket_descriptor;            /* socket descriptor */
 
 
 /*--------- Define struct types ---------*/
@@ -32,6 +35,7 @@ typedef struct sockaddr sockaddr;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct hostent hostent;
 typedef struct servent servent;
+
 /* Client structure */
 typedef struct {
   struct sockaddr_in addr;	/* Client remote address */
@@ -40,8 +44,17 @@ typedef struct {
   char name[MAX_NAME_SIZE];     /* Client name */
 } client;
 
+/* Channel structure */
+typedef struct {
+  char name[MAX_NAME_SIZE];                   /* Channel name */
+  int id;                                     /* Channel index */
+  int client_number;                          /* Number of user on the channel */
+  client *chan_clients[MAX_USER_BY_CHANNEL];  /* Array of client */
+} channel;
+
 
 client *clients[MAX_CLIENT_NUMBER];
+channel *channels[MAX_CHANNEL_NUMBER];
 
 /*--------- Functions ---------*/
 
@@ -63,6 +76,19 @@ void send_message_to_client(char *msg, int cli_co){
     perror("error: failing to send message to client");
   }
 }
+
+/* Send a message to the clients in a specific channel */
+void send_message_to_channel(char *msg, int index){
+  int i;
+  for (i = 0; i < MAX_USER_BY_CHANNEL; i++){
+    if (channels[index]->chan_clients[i]) {
+      if ((write(channels[index]->chan_clients[i]->cli_co, msg, strlen(msg)+1)) < 0){
+	perror("error: failing to send message to clients");
+      }
+    }
+  }
+}
+
 
 /* Find a client in the list using the name given,
 return client cli_co if found
@@ -106,13 +132,13 @@ void add_client(client *cli){
   for (i = 0; i < MAX_CLIENT_NUMBER; i++) {
     if (!clients[i]) {
       clients[i] = cli;
-      return;
+      break;
     }
   }
   clients_number++;
 }
 
-/* Remove a client from the client list and descrease the number of clients */
+/* Remove a client from the client list and decrease the number of clients */
 void remove_client(client *cli){
   int i;
   int cli_id = cli->id;
@@ -120,18 +146,79 @@ void remove_client(client *cli){
     if (clients[i]) {
       if ((clients[i])->id == cli_id) {
 	clients[i] = NULL;
-	return;
+	break;
       }
     }
   }
   clients_number--;
 }
 
+int find_channel_by_name(char *chan_name){
+  int i;
+  for (i = 0; i < MAX_CHANNEL_NUMBER; i++) {
+    if (channels[i]) {
+      if (!strcmp(channels[i]->name, chan_name)){
+	/* Debug */
+	printf("find channel by name = %d\n", i);
+	printf("chan id %d\n", channels[i]->id);
+	/* Return index if found */
+	return channels[i]->id;
+      }
+    }
+  }
+  return -1;
+}
+
+int add_channel(char *chan_name){
+  int i;
+  channel *chan;
+    for (i = 0; i < MAX_CHANNEL_NUMBER; i++) {
+      if (!channels[i]) {
+	chan = (channel *)malloc(sizeof(channel));
+	strcpy(chan->name,chan_name);
+	chan->id = i;
+	chan->client_number = 0;
+	channels[i] = chan;
+	break;
+      }
+    }
+    channels_number++;
+    return i;
+}
+
+void remove_channel(int index){
+  free(channels[index]);
+  channels[index] = NULL;
+  channels_number--;
+}
+
+int add_client_to_channel(client *cli, int chan_index){
+  int i;
+  channel *chan = channels[chan_index];
+  for (i = 0; i < MAX_USER_BY_CHANNEL ; i++){
+    if (chan->chan_clients[i]){
+      if (!strcmp(chan->chan_clients[i]->name, cli->name)){
+	return -1;
+      }
+    }
+  }
+  for (i = 0; i < MAX_USER_BY_CHANNEL ; i++){
+    if (!chan->chan_clients[i]){
+      chan->chan_clients[i] = cli;
+      chan->client_number++;
+      return 0;
+    }
+  }
+}
+
+void remove_client_from_channel(char *name, int chan_index){}
+
 /* Handle the client thread */
 void *client_loop(void *arg){
   char *buffer = calloc(BUFFER_SIZE, 1); /* message received */
   int length, /* length of the message*/
-    cli_co; /* socket_descriptor of the client */
+    cli_co, /* socket_descriptor of the client */
+    index;
   char out[BUFFER_SIZE]; /* message that will be sent */
   char *cmd, /* command received */
     *name, /* name received */
@@ -181,29 +268,98 @@ void *client_loop(void *arg){
       /* Command: /me <action> */
       else if (!strcmp(cmd, "/me")){
 	args = strtok(NULL, "\0");
-	sprintf(out, "%s %s", cli->name, args);
-	send_message_to_all(out);
+	if (args){
+	  sprintf(out, "%s %s", cli->name, args);
+	  send_message_to_all(out);
+	}
+	else {
+	  send_message_to_client("You must enter an action.\n", cli->cli_co);
+	}
       }
       /* Command: /pm <name> <private-message */
-      else if (!strcmp(cmd, "/pm")){
+      else if (!strcmp(cmd, "/pm")) {
 	name = strtok(NULL, " ");
 	/* Check if name exists in the client list */
 	if ((cli_co = find_client_by_name(name)) < 0){
-	  sprintf(out, "%s is not a valid user.\n", name);
-	  send_message_to_client(out, cli->cli_co);
+	  sprintf(out, "%s is already taken.\n", name);
 	}
 	/* Send the private message to both sender and receiver */
 	else {
 	  args = strtok(NULL, "\0");
-	  sprintf(out, "%s sends to you: %s", cli->name, args);
-	  send_message_to_client(out, cli_co);
-	  sprintf(out, "You sent to %s: %s", name, args);
-	  send_message_to_client(out, cli->cli_co);
+	  if (args){
+	    sprintf(out, "%s sends to you: %s", cli->name, args);
+	    send_message_to_client(out, cli_co);
+	    sprintf(out, "You sent to %s: %s", name, args);
+	  }
+	  else {
+	    sprintf(out, "You must enter a message.\n");
+	  }
 	}
+	send_message_to_client(out, cli->cli_co);
       }
-      else if (!strcmp(cmd, "/quit")){
-	  break;
-	}
+      /* Command: /join <channel-name> */
+      else if (!strcmp(cmd, "/join")) {
+	  name = strtok(NULL, " \n\t");
+	  if (name){
+	    /* Add the client to the defined channel if it already exists */
+	    if ((index = find_channel_by_name(name)) >= 0) {
+	      if (channels[index]->client_number < MAX_USER_BY_CHANNEL){
+		if (add_client_to_channel(cli, index) < 0){
+		  sprintf(out, "You are already on chan %s.\n", name);
+		}
+		else {
+		  sprintf(out, "%s had joined channel %s.\n", cli->name, name);
+		  send_message_to_channel(out, index);
+		sprintf(out, "Welcome to channel %s. You are the n°%d arrived on this channel.\n", name, channels[index]->client_number);
+		}
+	      }
+	      else {
+		sprintf(out, "Too many users on this channel already.\n");
+	      }
+	    }
+	    /* if the channel doesn't exists, create it */
+	    /* check if there are already too many channels */
+	    else if (channels_number < MAX_CHANNEL_NUMBER){
+	      /* Add the client to the newly created channel */
+	      index = add_channel(name);
+	      add_client_to_channel(cli, index);
+	      sprintf(out, "Welcome to channel %s. You are the n°%d arrived on this channel.\n", name, channels[index]->client_number);
+	    }
+	    else {
+	      sprintf(out, "Too many channels already.\n");
+	    }
+	  }
+	  else {
+	    sprintf(out, "You must enter a channel name.\n");
+	  }
+	  send_message_to_client(out, cli->cli_co);
+      }
+      /* Command: /tell <channel-name> <message> */
+      else if (!strcmp(cmd, "/tell")) {
+	  name = strtok(NULL, " \n\t");
+	  if (name && (index = find_channel_by_name(name)) >= 0){
+	    args = strtok(NULL, "\0");
+	    if (args){
+	      sprintf(out, "%s said on %s: %s", cli->name, name, args);
+	      send_message_to_channel(out, index);
+	    }
+	    else {
+	      sprintf(out, "You must enter a message.\n");
+	      send_message_to_client(out, cli->cli_co);
+	    }
+	  }
+	  else if (name){
+	    sprintf(out, "Channel %s doesn't exist. Create it first with /join %s.\n", name, name);
+	    send_message_to_client(out, cli->cli_co);
+	  }
+	  else {
+	    sprintf(out, "You must enter a channel name.\n");
+	    send_message_to_client(out, cli->cli_co);
+	  }
+      }
+      else if (!strcmp(cmd, "/quit")) {
+	break;
+      }
       /* Command: /help */
       else if (!strcmp(cmd, "/help")){
 	sprintf(out, "/nick <name>\tChange your username to <name>.\n");
