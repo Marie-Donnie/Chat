@@ -16,8 +16,8 @@
 /*--------- Define constants and global variables ---------*/
 
 #define SERVER_PORT 5000         /* Port used for sin_port from sockaddr_in */
-#define BUFFER_SIZE 1024          /* Size of buffers used */
-#define MAX_NAME_SIZE 32        /* Maximum name size for users and channels */
+#define BUFFER_SIZE 1024         /* Size of buffers used */
+#define MAX_NAME_SIZE 32         /* Maximum name size for users and channels */
 #define MAX_CLIENT_NUMBER 10     /* Maximum number of clients connected to the server */
 #define MAX_CHANNEL_NUMBER 10    /* Maximum number of channels on the server */
 #define MAX_USER_BY_CHANNEL 10   /* Maximum number of clients per channel */
@@ -35,21 +35,24 @@ typedef struct sockaddr_in sockaddr_in;
 typedef struct hostent hostent;
 typedef struct servent servent;
 
+typedef struct channel_s channel;
+
 /* Client structure */
 typedef struct {
   struct sockaddr_in addr;	/* Client remote address */
   int cli_co;			/* Informations about client*/
   int id;			/* Client identifier */
   char name[MAX_NAME_SIZE];     /* Client name */
+  channel *sub_chan[MAX_CHANNEL_NUMBER];   /* Subscribed channels */
 } client;
 
 /* Channel structure */
-typedef struct {
+struct channel_s {
   char name[MAX_NAME_SIZE];                   /* Channel name */
   int id;                                     /* Channel index */
   int client_number;                          /* Number of user on the channel */
   client *chan_clients[MAX_USER_BY_CHANNEL];  /* Array of client */
-} channel;
+};
 
 
 client *clients[MAX_CLIENT_NUMBER];
@@ -174,8 +177,8 @@ int find_channel_by_name(char *chan_name){
     if (channels[i]) {
       if (!strcmp(channels[i]->name, chan_name)){
 	/* Debug */
-	printf("find channel by name = %d\n", i);
-	printf("chan id %d\n", channels[i]->id);
+	/* printf("find channel by name = %d\n", i); */
+	/* printf("chan id %d\n", channels[i]->id); */
 	/* Return index if found */
 	return channels[i]->id;
       }
@@ -191,7 +194,7 @@ int add_channel(char *chan_name){
   channel *chan;
     for (i = 0; i < MAX_CHANNEL_NUMBER; i++) {
       if (!channels[i]) {
-	chan = (channel *)malloc(sizeof(channel));
+	chan = (channel *)calloc((sizeof(channel)),1);
 	strcpy(chan->name,chan_name);
 	chan->id = i;
 	chan->client_number = 0;
@@ -212,7 +215,7 @@ int remove_channel(int index){
 }
 
 /* Say if a user (from his name) is on a chan given its position in channels array
-   Return 0 if the given */
+   Return 0 if the given user is on the chan, -1 otherwise */
 int is_user_on_channel(char *name, int chan_index){
   int i;
   channel *chan = channels[chan_index];
@@ -229,13 +232,19 @@ int is_user_on_channel(char *name, int chan_index){
 /* Add a client to a channel given its position in channels array.
    Return the index of the client in the array, or -1 if the user is already on the channel*/
 int add_client_to_channel(client *cli, int chan_index){
-  int i;
+  int i, j;
   channel *chan = channels[chan_index];
   if (is_user_on_channel(cli->name, chan_index) < 0) {
     for (i = 0; i < MAX_USER_BY_CHANNEL ; i++){
       if (!chan->chan_clients[i]){
 	chan->chan_clients[i] = cli;
 	chan->client_number++;
+	for (j = 0; j < MAX_CHANNEL_NUMBER ; j++){
+	  if (!cli->sub_chan[j]){
+	    cli->sub_chan[j] = chan;
+	    break;
+	  }
+	}
 	return i;
       }
     }
@@ -246,14 +255,33 @@ int add_client_to_channel(client *cli, int chan_index){
 /* Remove a user (from his name) from a chan given its position in channels
    Return the number of user left on the channel. */
 int remove_user_from_channel(char *name, int chan_index){
-  int i;
+  int i, j;
   channel *chan = channels[chan_index];
   for (i = 0; i < MAX_USER_BY_CHANNEL ; i++){
+    /* Debug */
+    /* if (chan->chan_clients[i]){ */
+    /*   printf("nom client : %s\n",chan->chan_clients[i]->name); */
+    /*   printf("nom donne: %s\n",name); */
+    /* } */
     if (chan->chan_clients[i] && !strcmp(chan->chan_clients[i]->name, name)) {
+      for (j = 0; j < MAX_CHANNEL_NUMBER ; j++){
+	/* Debug */
+	/* if (chan->chan_clients[i]->sub_chan[j]){ */
+	/*     printf("chan : %s\n",chan->chan_clients[i]->sub_chan[j]->name); */
+	/*     printf("chan donne: %s\n",chan->name); */
+	/* } */
+	if (chan->chan_clients[i]->sub_chan[j] &&
+	    !strcmp(chan->chan_clients[i]->sub_chan[j]->name, chan->name)){
+	  chan->chan_clients[i]->sub_chan[j] = NULL;
+	}
+      }
       chan->chan_clients[i] = NULL;
       chan->client_number--;
       break;
     }
+  }
+  if (chan->client_number == 0){
+    remove_channel(chan_index);
   }
   return chan->client_number;
 }
@@ -427,19 +455,23 @@ void *client_loop(void *arg){
 	if (name){
 	  /* Get the index of the chan given */
 	  index = find_channel_by_name(name);
+	  if (index < 0){
+	    sprintf(out, "Chan %s doesn't exist.\n", name);
+	    send_message_to_client(out, cli->cli_co);
+	  }
 	  /* Remove the user only if he is already on channel */
-	  if (is_user_on_channel(cli->name, index) == 0) {
+	  else if (is_user_on_channel(cli->name, index) == 0) {
 	    answer = remove_user_from_channel(cli->name, index);
 	    sprintf(out, "Left channel: %s. \n", name);
 	    send_message_to_client(out, cli->cli_co);
-	    sprintf(out, "%s left channel %s.\n", cli->name, name);
-	    send_message_to_channel(out, index);
-	    /* Remove chan from the chan list if there are not any user left */
-	    if (answer == 0) {
-	      printf("number of chan: %d.\n", channels_number);
-	      remove_channel(index);
-	      printf("number of chan: %d.\n", channels_number);
+	    if (answer != 0){
+	      sprintf(out, "%s left channel %s.\n", cli->name, name);
+	      send_message_to_channel(out, index);
 	    }
+	  }
+	  else {
+	    sprintf(out, "You are not on channel %s", name);
+	    send_message_to_client(out, cli->cli_co);
 	  }
 	}
       }
@@ -526,6 +558,13 @@ void *client_loop(void *arg){
   send_message_to_all(out);
 
   /* Handle the proper closing of the thread */
+  for(index = 0; index < MAX_CHANNEL_NUMBER; index++) {
+    if (cli->sub_chan[index]) {
+      answer = find_channel_by_name(cli->sub_chan[index]->name);
+      remove_user_from_channel(cli->name, answer);
+    }
+  }
+
   close(cli->cli_co);
   remove_client(cli);
   free(cli);
@@ -599,7 +638,7 @@ int main(int argc, char **argv) {
     }
 
     /* Client settings and handling */
-    cli = (client *)malloc(sizeof(client));
+    cli = (client *)calloc((sizeof(client)), 1);
     cli->addr = cli_addr;
     cli->cli_co = new_socket_descriptor;
     cli->id = id++;
