@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <linux/types.h>
-#include <sys/socket.h>
 #include <netdb.h>
 #include <string.h>
 #include <signal.h>
@@ -17,7 +16,7 @@
 /*--------- Define constants and global variables ---------*/
 
 #define SERVER_PORT 5000         /* Port used for sin_port from sockaddr_in */
-#define BUFFER_SIZE 512          /* Size of buffers used */
+#define BUFFER_SIZE 1024          /* Size of buffers used */
 #define MAX_NAME_SIZE 32        /* Maximum name size for users and channels */
 #define MAX_CLIENT_NUMBER 10     /* Maximum number of clients connected to the server */
 #define MAX_CHANNEL_NUMBER 10    /* Maximum number of channels on the server */
@@ -494,11 +493,20 @@ void *client_loop(void *arg){
       else if (!strcmp(cmd, "/quit")) {
 	break;
       }
-      /* Command: /help */
-      else if (!strcmp(cmd, "/help")){
-	sprintf(out, "/nick <name>\tChange your username to <name>.\n");
+      /* Command: /help or not recognized command */
+      else {
+	sprintf(out, "\n");
+	if (strcmp(cmd, "/help")){
+	  strcat(out, "Unrecognized command.\n");
+	}
+	strcat(out, "/nick <name>\tChange your username to <name>.\n");
 	strcat(out, "/me <action>\tSend the <action> to all.\n");
 	strcat(out, "/pm <name> <private-message>\tSend <private-message> to <name>.\n");
+	strcat(out, "/join <channel-name>\tJoin or create channel <channel-name>.\n");
+	strcat(out, "/tell <channel-name> <message>\tSend a message to a previously created channel.\n");
+	strcat(out, "/leave <channel-name>\tLeave channel <channel-name>.\n");
+	strcat(out, "/who <channel>\tList the users on <channel>. Use 'global' for server.\n");
+	strcat(out, "/howmany <channel>\tCounts the users on <channel>. Use 'global' for server.\n");
 	strcat(out, "/quit\tQuit the client.\n");
 	strcat(out, "/help\tPrint this message.\n");
 	send_message_to_client(out, cli->cli_co);
