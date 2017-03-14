@@ -460,6 +460,9 @@ void *client_loop(void *arg){
 	    sprintf(out, "Users on channel %s: %s\n", args, name);
 	    free(name);
 	  }
+	  else {
+	    sprintf(out, "No channel named %s.\n", args);
+	  }
 	}
 	send_message_to_client(out, cli->cli_co);
       }
@@ -481,6 +484,9 @@ void *client_loop(void *arg){
 	    sprintf(out, "Users on channel %s : %d on %d users authorized.\n",
 		    channels[index]->name, channels[index]->client_number, MAX_USER_BY_CHANNEL);
 	  }
+	  else {
+	    sprintf(out, "No channel named %s.\n", args);
+	  }
 	  send_message_to_client(out, cli->cli_co);
 	}
       }
@@ -493,6 +499,7 @@ void *client_loop(void *arg){
 	sprintf(out, "/nick <name>\tChange your username to <name>.\n");
 	strcat(out, "/me <action>\tSend the <action> to all.\n");
 	strcat(out, "/pm <name> <private-message>\tSend <private-message> to <name>.\n");
+	strcat(out, "/quit\tQuit the client.\n");
 	strcat(out, "/help\tPrint this message.\n");
 	send_message_to_client(out, cli->cli_co);
       }
