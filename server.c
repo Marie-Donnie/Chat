@@ -427,25 +427,32 @@ void *client_loop(void *arg){
       /* Command: /tell <channel-name> <message> */
       else if (!strcmp(cmd, "/tell")) {
 	  name = strtok(NULL, " \n\t");
-	  /* Send message if the given name is a channel */
-	  if (name && (index = find_channel_by_name(name)) >= 0){
-	    args = strtok(NULL, "\0");
-	    /* And if there is a message */
-	    if (args){
-	      sprintf(out, "%s said on %s: %s", cli->name, name, args);
-	      send_message_to_channel(out, index);
+	  args = strtok(NULL, "\0");
+	  /* If there is a message */
+	  if (args){
+	    if (name){
+	      /* Send message if the given name is a channel */
+	      if ((index = find_channel_by_name(name)) >= 0) {
+		sprintf(out, "%s said on %s: %s", cli->name, name, args);
+		send_message_to_channel(out, index);
+	      }
+	      /* Send message to server if name is global */
+	      else if (!strcmp(name, "global")){
+		sprintf(out, "%s said : %s", cli->name, args);
+		send_message_to_all(out);
+	      }
+	      else {
+		sprintf(out, "Channel %s doesn't exist. Create it first with /join %s.\n", name, name);
+		send_message_to_client(out, cli->cli_co);
+	      }
 	    }
 	    else {
-	      sprintf(out, "You must enter a message.\n");
+	      sprintf(out, "You must enter a channel name.\n");
 	      send_message_to_client(out, cli->cli_co);
 	    }
 	  }
-	  else if (name){
-	    sprintf(out, "Channel %s doesn't exist. Create it first with /join %s.\n", name, name);
-	    send_message_to_client(out, cli->cli_co);
-	  }
 	  else {
-	    sprintf(out, "You must enter a channel name.\n");
+	    sprintf(out, "You must enter a message.\n");
 	    send_message_to_client(out, cli->cli_co);
 	  }
       }
@@ -495,6 +502,9 @@ void *client_loop(void *arg){
 	    sprintf(out, "No channel named %s.\n", args);
 	  }
 	}
+	else {
+	  sprintf(out, "You need to enter a channel name.\n");
+	}
 	send_message_to_client(out, cli->cli_co);
       }
       /* Command: /howmany <channel> */
@@ -518,8 +528,11 @@ void *client_loop(void *arg){
 	  else {
 	    sprintf(out, "No channel named %s.\n", args);
 	  }
-	  send_message_to_client(out, cli->cli_co);
 	}
+	else {
+	  sprintf(out, "You need to enter a channel name.\n");
+	}
+	send_message_to_client(out, cli->cli_co);
       }
       /* Command: /quit */
       else if (!strcmp(cmd, "/quit")) {
