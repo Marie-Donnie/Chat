@@ -23,7 +23,7 @@ typedef struct servent servent;
 
 #define MAX_NAME_SIZE 256        /* Maximum name size for users and channels */
 #define SERVER_PORT 5000         /* Port used for sin_port from sockaddr_in */
-#define BUFFER_SIZE 512          /* Size of buffers used */
+#define BUFFER_SIZE 1024          /* Size of buffers used */
 
 static int socket_descriptor;    /* socket descriptor */
 
