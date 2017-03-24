@@ -23,7 +23,7 @@
 #define MAX_USER_BY_CHANNEL 10   /* Maximum number of clients per channel */
 
 static unsigned int clients_number = 0;  /* counts the client connected to the server */
-static int id = 0;                       /* id of the client */
+static int id = 1;                       /* id of the client */
 static unsigned int channels_number = 0; /* counts the defined channels */
 static int socket_descriptor;            /* socket descriptor */
 
@@ -33,13 +33,12 @@ static int socket_descriptor;            /* socket descriptor */
 typedef struct sockaddr sockaddr;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct hostent hostent;
-typedef struct servent servent;
 
 typedef struct channel_s channel;
 
 /* Client structure */
 typedef struct {
-  struct sockaddr_in addr;	/* Client remote address */
+  sockaddr_in addr;     	/* Client remote address */
   int cli_co;			/* Informations about client*/
   int id;			/* Client identifier */
   char name[MAX_NAME_SIZE];     /* Client name */
@@ -609,7 +608,11 @@ int main(int argc, char **argv) {
     perror("error: unable to find server using its name.");
     exit(1);
   }
-
+  /* printf("ptr host\n"); */
+  /* printf("h_name %s \n",ptr_host->h_name); */
+  /* printf("h_addrtype %d \n",ptr_host->h_addrtype); */
+  /* printf("h_length %d \n",ptr_host->h_length); */
+  /* printf("h_addr_list %s \n",ptr_host->h_addr); */
   /* initialize sockaddr_in with these informations */
   bcopy((char*)ptr_host->h_addr, (char*)&local_address.sin_addr, ptr_host->h_length);
   local_address.sin_family = ptr_host->h_addrtype;
@@ -638,16 +641,18 @@ int main(int argc, char **argv) {
     if ((new_socket_descriptor =
 	 accept(socket_descriptor,
 		(sockaddr*)(&cli_addr),
-		&address_length))
-	< 0) {
+		&address_length)
+	 ) < 0) {
       perror("error: unable to accept connection to the client.");
       exit(1);
     }
 
     /* check if there are already too many clients */
-    if ( (clients_number+1) == MAX_CLIENT_NUMBER){
+    if ( (clients_number) >= MAX_CLIENT_NUMBER){
       printf("Too many clients already; client rejected\n");
+      send_message_to_client("Too many clients, try again later.\n", new_socket_descriptor);
       close(new_socket_descriptor);
+      continue;
     }
 
     /* Client settings and handling */

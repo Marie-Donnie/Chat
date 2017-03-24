@@ -17,11 +17,10 @@
 typedef struct sockaddr sockaddr;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct hostent hostent;
-typedef struct servent servent;
 
 /*--------- Define constants and global variables ---------*/
 
-#define MAX_NAME_SIZE 256        /* Maximum name size for users and channels */
+#define MAX_NAME_SIZE 32        /* Maximum name size for users and channels */
 #define SERVER_PORT 5000         /* Port used for sin_port from sockaddr_in */
 #define BUFFER_SIZE 1024          /* Size of buffers used */
 
